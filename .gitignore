@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+
+# Environment
+.env
+.env.*
+
+# Pytest cache
+.pytest_cache/
+
+# VS Code
+.vscode/
+
+# Docker
+*.log
+*.pid
+*.sock
+*.tar
+*.bak
+*.swp
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db

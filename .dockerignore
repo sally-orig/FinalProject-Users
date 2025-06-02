@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# SQLite database files
+*.db
+
+# Logs
+*.log
+
+# Environment and secrets
+.env
+.env.*
+
+# Virtual environments
+venv/
+.env/
+
+# Editor/IDE settings
+.vscode/
+.idea/
+
+# Git-related
+.git
+.gitignore
+
+# Test artifacts
+pytest_cache/
+.coverage
+htmlcov/
+
+# Alembic cache (if any)
+alembic/versions/__pycache__/
+
+# Docker artifacts
+*.tar
+*.bak
+*.swp
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
