@@ -1,20 +1,45 @@
-# User Management
+# 👥 User Management API
 
-A fastapi application to manage users - includes creating, updating, deleting and viewing of users and their information.
+A FastAPI-based application to manage users — supports creating, updating, deleting, and retrieving user information.
 
-## Current Endpoints
+---
 
-1. GET /users - get all users
-2. GET /users/{user_id} - get user details given an Id
+## 🚀 Features
 
+- Retrieve all users
+- Retrieve user by ID
+- Supports pagination and status filters
+- Uses SQLite with Alembic for migrations
+- Dockerized for easy deployment
 
-## How to run application
+---
 
-1. Clone git repository to your local machine
-    >git clone <https://github.com/sally-orig/FinalProject-Users.git> UserManagementProject
-2. Go to UserManagementProject folder:
-    >cd UserManagementProject
-3. Build docker fastapi_users_image image
-    >docker build -t fastapi_users_image .
-4. Put up container
-    >docker run -p 8085:8085 fastapi_users_image
+## 📚 API Endpoints
+
+| Method | Endpoint           | Description              |
+|--------|--------------------|--------------------------|
+| GET    | `/users`           | Retrieve all users       |
+| GET    | `/users/{user_id}` | Get user by ID           |
+
+> You can explore and test these endpoints via the **Swagger UI** at [http://localhost:8085/docs](http://localhost:8085/docs) once the app is running.
+
+---
+
+## 🐳 How to Run Using Docker
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/sally-orig/FinalProject-Users.git UserManagementProject
+
+cd UserManagementProject
+
+### 2. Build Docker Image
+
+```bash
+docker build -t fastapi_users_image .
+
+### 3. Run container
+
+```bash
+docker run -p 8085:8085 fastapi_users_image
