@@ -33,13 +33,16 @@ A FastAPI-based application to manage users — supports creating, updating, del
 git clone https://github.com/sally-orig/FinalProject-Users.git UserManagementProject
 
 cd UserManagementProject
+```
 
 ### 2. Build Docker Image
 
 ```bash
 docker build -t fastapi_users_image .
+```
 
 ### 3. Run container
 
 ```bash
 docker run -p 8085:8085 fastapi_users_image
+```
