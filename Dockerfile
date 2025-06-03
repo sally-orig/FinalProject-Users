@@ -1,16 +1,27 @@
+# Builder stage
+FROM python:3.13-slim AS builder
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ./user ./user
+COPY ./alembic ./alembic
+COPY alembic.ini .
+
+# Final stage
 FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy only installed Python packages from builder
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy your application code
-COPY . .
+# Copy your app source code
+COPY --from=builder /app /app
 
-# Expose the port your FastAPI app listens on
 EXPOSE 8085
 
-# Run FastAPI app with Uvicorn
 CMD ["bash", "-c", "alembic upgrade head && uvicorn user.main:app --host 0.0.0.0 --port 8085"]

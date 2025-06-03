@@ -53,7 +53,7 @@ docker build -t fastapi_users_image .
 docker run -p 8085:8085 fastapi_users_image
 ```
 
-## 🐳 How to deploy to AWS Fargate using Terraform and GitHub actions
+## How to deploy to AWS Fargate using script
 
 ### 1. Clone the Repository to your local machine
 
@@ -62,6 +62,32 @@ git clone https://github.com/sally-orig/FinalProject-Users.git UserManagementPro
 ```
 
 ### 2. Configure AWS credentials then enter your Access Key, Secret Key, and default region (e.g., us-east-1)
+
+```bash
+aws configure
+```
+
+### 3. Make deploy.sh executable
+
+```bash
+chmod +x deploy.sh
+```
+
+### 4. Execute deploy.sh script
+
+```bash
+./deploy.sh
+```
+
+## How to deploy to AWS Fargate using Terraform and GitHub actions
+
+### 1. Clone the Repository to local
+
+```bash
+git clone https://github.com/sally-orig/FinalProject-Users.git UserManagementProject
+```
+
+### 2. Configure AWS credentials. Enter your Access Key, Secret Key, and default region (e.g., us-east-1)
 
 ```bash
 aws configure
