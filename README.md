@@ -25,11 +25,12 @@ A FastAPI-based application to manage users — supports creating, updating, del
 
 ---
 
-## Prerequisites
+## ⚙️ Prerequisites
 
-- [AWS CLI](https://aws.amazon.com/cli/) installed and configured
-- [Terraform](https://www.terraform.io/downloads.html) installed (version compatible with this repo)
-- Docker installed (for building container images)
+- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) installed and configured
+- *[Terraform](https://developer.hashicorp.com/terraform/install) installed (only if deploying via Terraform)
+- [Docker](https://www.docker.com/get-started) for building containers/images
+- [Git](https://git-scm.com/)
 
 ## 🐳 How to Run Using Docker
 
@@ -53,7 +54,7 @@ docker build -t fastapi_users_image .
 docker run -p 8085:8085 fastapi_users_image
 ```
 
-## How to deploy to AWS Fargate using script
+## ☁️📜 How to deploy to AWS Fargate using a script
 
 ### 1. Clone the Repository to your local machine
 
@@ -79,7 +80,7 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-## How to deploy to AWS Fargate using Terraform and GitHub actions
+## ☁️📦🧩 How to deploy to AWS Fargate using Terraform and GitHub actions
 
 ### 1. Clone the Repository to local
 
