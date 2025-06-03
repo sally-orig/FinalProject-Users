@@ -6,6 +6,15 @@ __pycache__/
 *.sqlite3
 *.db
 
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# Docker
+*.dockerignore
+
 # Environment
 .env
 .env.*
