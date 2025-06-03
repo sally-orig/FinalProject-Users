@@ -1,0 +1,15 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "fastapi-user-container",
+      "image": "DYNAMICALLY_REPLACED",
+      "portMappings": [
+        {
+          "containerPort": 8085,
+          "hostPort": 8085
+        }
+      ],
+      "essential": true
+    }
+  ]
+}

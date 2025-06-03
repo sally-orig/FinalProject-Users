@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *.so
+*.pyo
+*.pyd
 
 # SQLite database files
 *.db
@@ -42,3 +44,5 @@ alembic/versions/__pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+tests/

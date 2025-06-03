@@ -1,0 +1,66 @@
+name: Deploy FastAPI to ECS Fargate
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-east-1
+      ECR_REPO_NAME: fastapi-user
+      ECS_CLUSTER_NAME: fastapi-user-cluster
+      ECS_SERVICE_NAME: fastapi-user-service
+      TASK_FAMILY: fastapi-user-task
+      CONTAINER_NAME: fastapi-user-container
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Build and push Docker image to ECR
+      id: build-image
+      run: |
+        AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_NAME }}:${{ github.sha }}"
+        echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
+        docker build -t $IMAGE_URI .
+        docker push $IMAGE_URI
+
+    - name: Render new task definition
+      run: |
+        aws ecs describe-task-definition \
+          --task-definition ${{ env.TASK_FAMILY }} \
+          --query "taskDefinition" > task-def.json
+
+        jq --arg IMAGE "$IMAGE_URI" \
+           '.containerDefinitions[0].image = $IMAGE' \
+           task-def.json > new-task-def.json
+
+    - name: Register new task definition
+      id: register-task-def
+      run: |
+        NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
+          --cli-input-json file://new-task-def.json \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
+        echo "NEW_TASK_DEF_ARN=$NEW_TASK_DEF_ARN" >> $GITHUB_ENV
+
+    - name: Update ECS service
+      run: |
+        aws ecs update-service \
+          --cluster ${{ env.ECS_CLUSTER_NAME }} \
+          --service ${{ env.ECS_SERVICE_NAME }} \
+          --task-definition $NEW_TASK_DEF_ARN
