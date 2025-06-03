@@ -45,9 +45,13 @@ jobs:
           --task-definition ${{ env.TASK_FAMILY }} \
           --query "taskDefinition" > task-def.json
 
+        # Remove fields that can't be passed to register-task-definition
+        jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' task-def.json > cleaned-task-def.json
+
+        # Update container image
         jq --arg IMAGE "$IMAGE_URI" \
-           '.containerDefinitions[0].image = $IMAGE' \
-           task-def.json > new-task-def.json
+          '.containerDefinitions[0].image = $IMAGE' \
+          cleaned-task-def.json > new-task-def.json
 
     - name: Register new task definition
       id: register-task-def
@@ -57,6 +61,7 @@ jobs:
           --query 'taskDefinition.taskDefinitionArn' \
           --output text)
         echo "NEW_TASK_DEF_ARN=$NEW_TASK_DEF_ARN" >> $GITHUB_ENV
+
 
     - name: Update ECS service
       run: |
