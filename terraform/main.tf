@@ -4,6 +4,7 @@ provider "aws" {
 
 resource "aws_ecr_repository" "fastapi" {
   name = var.ecr_repo_name
+  force_delete = true
 }
 
 resource "aws_ecs_cluster" "fastapi" {
