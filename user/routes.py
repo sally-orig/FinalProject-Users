@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from .crud import get_all_users, get_user_by_id
+from .crud import get_all_users, get_user_by_id, create_user
 from .db import get_db
-from .schemas import PaginatedResponse, UserOut, StatusEnum
+from .schemas import PaginatedResponse, UserOut, StatusEnum, UserCreate
 from typing import Optional
 
 router = APIRouter()
@@ -22,3 +22,11 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+@router.post("/register", response_model=None, status_code=status.HTTP_201_CREATED, summary="Register a new user", description="Create a new user with the provided details.")
+async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
+    try:
+        create_user(db, user_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"message": "User created successfully"}

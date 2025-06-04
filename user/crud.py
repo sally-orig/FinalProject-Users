@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
-from .models import User
-from .schemas import UserOut, PaginatedResponse
+from .models import User, Credential
+from .schemas import UserOut, PaginatedResponse, UserCreate
+from .auth import get_password_hash
 from typing import Optional
 
 def get_all_users(db: Session, offset: int = 0, limit: int = 20, status: Optional[str] = None) -> PaginatedResponse:
@@ -44,3 +45,40 @@ def get_user_by_id(db: Session, user_id: int) -> UserOut | None:
         UserOut | None: A UserOut schema representing the user, or None if not found.
     """
     return db.query(User).filter(User.id == user_id).first()
+
+def create_user(db: Session, user_data: UserCreate) -> None:
+    """
+    Create a new user in the database.
+    Args:
+        db (Session): The database session.
+        user_data (UserOut): The data for the user to be created.
+
+    Returns:
+        None: This function does not return anything. It commits the new user to the database.
+    """
+    existing_email = db.query(User).filter(User.email == user_data.email).first()
+    existing_username = db.query(Credential).filter(Credential.username == user_data.username).first()
+    if existing_email:
+        raise ValueError("Email already exists")
+    if existing_username:
+        raise ValueError("Username already exists")
+
+    username = user_data.username
+    plain_password = user_data.plain_password
+    hashed_password = get_password_hash(plain_password)
+
+    user = User(**user_data.model_dump(exclude={"username", "plain_password"}))
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    credential = Credential(
+        user_id=user.id,
+        username=username,
+        hashed_password=hashed_password
+    )
+    db.add(credential)
+    db.commit()
+    db.refresh(credential)
+
+

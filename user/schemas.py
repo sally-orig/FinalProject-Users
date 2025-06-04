@@ -34,12 +34,10 @@ class UserOut(UserBase):
         from_attributes=True
     )
 
-class UserCreate(BaseModel):
-    email: str
-    mobile: str
-    firstName: str
-    middleName: str
-    lastName: str
-    role: str
-    status: str
-    created_at: datetime
+class UserCreate(UserBase):
+    username: str
+    plain_password: str
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )
