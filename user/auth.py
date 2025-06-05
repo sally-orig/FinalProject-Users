@@ -5,8 +5,9 @@ from fastapi import HTTPException, status, APIRouter, Depends, HTTPException, He
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from .models import Credential
-from .schemas import UserOut
+from .schemas import UserOut, ActionLogEnum, ActionLogActionsEnum
 from .db import get_db
+from .logger import logger, log_action
 
 token_router = APIRouter()
 
@@ -54,16 +55,22 @@ def authenticate_user(db: Session, username: str, plain_password: str) -> UserOu
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
+        logger.warning(f"Failed login: username={form_data.username}")
+        log_action(db, user_name=form_data.username, action=ActionLogEnum.login, status=ActionLogActionsEnum.failed)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"}
         )
     access_token = create_access_token(data={"sub": str(user["id"])})
+    logger.info(f"Token issued: user_id={str(user['id'])}")
+    log_action(db, user_id=user["id"], action=ActionLogEnum.login, status=ActionLogActionsEnum.success)
     return {"access_token": access_token, "token_type": "bearer"}
 
 def verify_token(token: str):
+    logger.info(f"Token verification attempt")
     if not token or token.lower() == "undefined":
+        logger.warning(f"Token verification failed: Invalid or missing token")
         raise HTTPException(status_code=401, detail="Invalid or missing token")
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -72,9 +79,10 @@ def verify_token(token: str):
             raise HTTPException(**credentials_exception)
         return user_id
     except JWTError as e:
-        print(f"JWTError: {e}")
+        logger.warning(f"Token verification failed: Incorrect username or password")
         raise HTTPException(**credentials_exception)
     except ExpiredSignatureError:
+        logger.warning(f"Token verification failed: Token has expired")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
@@ -83,13 +91,15 @@ def verify_token(token: str):
 
 @token_router.post("/verify", status_code=status.HTTP_200_OK, summary="Verify access token", description="Verify the provided access token and return user information.")
 async def verify_access_token(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    print(f"Token received: {token!r}")
     user_id = verify_token(token)
     user = db.query(Credential).filter(Credential.user_id == user_id).first()
     if not user:
+        logger.warning(f"Token verification failed: User not found for user_id={user_id}")
+        log_action(db, user_id=user["id"], action=ActionLogEnum.verify_token, status=ActionLogActionsEnum.failed)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"}
         )
+    log_action(db, user_id=user.id, action=ActionLogEnum.verify_token, status=ActionLogActionsEnum.success)
     return UserOut.model_validate(user.user).model_dump()

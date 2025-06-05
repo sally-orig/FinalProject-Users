@@ -7,6 +7,32 @@ class StatusEnum(str, Enum):
     active = "active"
     inactive = "inactive"
 
+class ActionLogActionsEnum(str, Enum):
+    success = "success"
+    failed = "failed"
+
+class ActionLogEnum(str, Enum):
+    register_user = "register_user"
+    update_user = "update_user"
+    login = "login"
+    logout = "logout"
+    generate_token = "generate_token"
+    verify_token = "verify_token"
+
+class ActionLogBase(BaseModel):
+    user_id: int
+    user_name: str
+    action: ActionLogEnum
+    status: str
+    timestamp: datetime
+
+class ActionLogOut(ActionLogBase):
+    id: int
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
 class PaginatedResponse(BaseModel):
     totalCount: int
     offset: int

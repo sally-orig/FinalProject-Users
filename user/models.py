@@ -30,3 +30,14 @@ class Credential(Base):
     updated_at = Column(DateTime, nullable=True)
 
     user = relationship("User", back_populates="credential")
+
+class ActionLog(Base):
+    __tablename__ = "action_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=True)
+    username = Column(String(255), nullable=True)
+    action = Column(String, nullable=False)
+    timestamp = Column(DateTime, default=datetime.now(timezone.utc))
+    ip_address = Column(String, nullable=True)
+    status = Column(String, default="success")
