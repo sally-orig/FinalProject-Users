@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, UTC
 from jose import jwt, JWTError, ExpiredSignatureError
 from passlib.context import CryptContext
-from fastapi import HTTPException, status, APIRouter, Depends, HTTPException
+from fastapi import HTTPException, status, APIRouter, Depends, HTTPException, Header
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from .models import Credential
@@ -35,22 +35,6 @@ credentials_exception = {
     "detail": "Could not validate credentials",
     "headers": {"WWW-Authenticate": "Bearer"},
 }
-
-def verify_token(token: str):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(**credentials_exception)
-        return user_id
-    except JWTError:
-        return HTTPException(**credentials_exception)
-    except ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
     
 def authenticate_user(db: Session, username: str, plain_password: str) -> UserOut | None:
     """Authenticate a user by username and password.
@@ -66,7 +50,7 @@ def authenticate_user(db: Session, username: str, plain_password: str) -> UserOu
         return None
     return UserOut.model_validate(credentials.user).model_dump()
     
-@token_router.post("/token", status_code=status.HTTP_200_OK, summary="Generate access token", description="Generate an access token for the user.")
+@token_router.post("", status_code=status.HTTP_200_OK, summary="Generate access token", description="Generate an access token for the user.")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -75,5 +59,37 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"}
         )
-    access_token = create_access_token(data={"sub": user["id"]})
-    return access_token
+    access_token = create_access_token(data={"sub": str(user["id"])})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+def verify_token(token: str):
+    if not token or token.lower() == "undefined":
+        raise HTTPException(status_code=401, detail="Invalid or missing token")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: int = int(payload.get("sub"))
+        if user_id is None:
+            raise HTTPException(**credentials_exception)
+        return user_id
+    except JWTError as e:
+        print(f"JWTError: {e}")
+        raise HTTPException(**credentials_exception)
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+@token_router.post("/verify", status_code=status.HTTP_200_OK, summary="Verify access token", description="Verify the provided access token and return user information.")
+async def verify_access_token(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    print(f"Token received: {token!r}")
+    user_id = verify_token(token)
+    user = db.query(Credential).filter(Credential.user_id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+    return UserOut.model_validate(user.user).model_dump()

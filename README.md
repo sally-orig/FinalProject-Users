@@ -6,9 +6,11 @@ A FastAPI-based application to manage users — supports creating, updating, del
 
 ## 🚀 Features
 
-- Retrieve all users
+- Retrieve all users (Supports pagination and status filters)
 - Retrieve user by ID
-- Supports pagination and status filters
+- Register new user
+- Generate token after successful user log in
+- Verify token
 - Uses SQLite with Alembic for migrations
 - Dockerized for easy deployment
 
@@ -18,8 +20,11 @@ A FastAPI-based application to manage users — supports creating, updating, del
 
 | Method | Endpoint           | Description              |
 |--------|--------------------|--------------------------|
+| POST   | `/token`           | Generate token for auth  |
+| POST   | `/token/verify`    | Verify token             |
 | GET    | `/users`           | Retrieve all users       |
 | GET    | `/users/{user_id}` | Get user by ID           |
+| POST   | `/users/register`  | Register a new user      |
 
 > You can explore and test these endpoints via the **Swagger UI** at [http://localhost:8085/docs](http://localhost:8085/docs) once the app is running.
 

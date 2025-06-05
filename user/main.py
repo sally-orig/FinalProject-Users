@@ -9,6 +9,6 @@ app = FastAPI(title="User Management API", version="1.0.0")
 async def read_root():
     return RedirectResponse(url="/docs")
 
-app.include_router(token_router, prefix="/token", tags=["token"])
+app.include_router(token_router, prefix="/token", tags=["authentication"])
 app.include_router(router, prefix="/users", tags=["users"])
 
