@@ -66,8 +66,10 @@ def create_user(db: Session, user_data: UserCreate) -> None:
     username = user_data.username
     plain_password = user_data.plain_password
     hashed_password = get_password_hash(plain_password)
-
-    user = User(**user_data.model_dump(exclude={"username", "plain_password"}))
+    
+    user_dict = user = user_data.model_dump(exclude={"username", "plain_password"})
+    user_dict["completeName"] = f"{user_data.firstName} {user_data.middleName or ''} {user_data.lastName}".strip()
+    user = User(**user_dict)
     db.add(user)
     db.commit()
     db.refresh(user)

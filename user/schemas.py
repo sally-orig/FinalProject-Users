@@ -24,11 +24,11 @@ class UserBase(BaseModel):
     middleName: Optional[str] = None
     lastName: str
     role: str
-    status: StatusEnum = StatusEnum.active
-    created_at: datetime
-
 class UserOut(UserBase):
     id: int
+    completeName: str
+    status: StatusEnum = StatusEnum.active
+    created_at: datetime
 
     model_config = ConfigDict(
         from_attributes=True
