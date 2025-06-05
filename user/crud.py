@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session
 from .models import User, Credential
-from .schemas import UserOut, PaginatedResponse, UserCreate
+from .schemas import UserOut, PaginatedResponse, UserCreate, UserUpdate
 from .auth import get_password_hash
 from typing import Optional
+from datetime import datetime, timezone
 
 def get_all_users(db: Session, offset: int = 0, limit: int = 20, status: Optional[str] = None) -> PaginatedResponse:
     """
@@ -46,6 +47,19 @@ def get_user_by_id(db: Session, user_id: int) -> UserOut | None:
     """
     return db.query(User).filter(User.id == user_id).first()
 
+def generate_complete_name(first_name: str, middle_name: Optional[str], last_name: str) -> str:
+    """
+    Generate a complete name from first, middle, and last names.
+    Args:
+        first_name (str): The first name of the user.
+        middle_name (Optional[str]): The middle name of the user, can be None.
+        last_name (str): The last name of the user.
+
+    Returns:
+        str: The complete name formatted as "First Middle Last".
+    """
+    return f"{first_name} {middle_name or ''} {last_name}".strip()
+
 def create_user(db: Session, user_data: UserCreate) -> None:
     """
     Create a new user in the database.
@@ -68,7 +82,11 @@ def create_user(db: Session, user_data: UserCreate) -> None:
     hashed_password = get_password_hash(plain_password)
     
     user_dict = user = user_data.model_dump(exclude={"username", "plain_password"})
-    user_dict["completeName"] = f"{user_data.firstName} {user_data.middleName or ''} {user_data.lastName}".strip()
+    user_dict["completeName"] = generate_complete_name(
+        first_name=user_data.firstName,
+        middle_name=user_data.middleName or None,
+        last_name=user_data.lastName
+    )
     user = User(**user_dict)
     db.add(user)
     db.commit()
@@ -83,4 +101,36 @@ def create_user(db: Session, user_data: UserCreate) -> None:
     db.commit()
     db.refresh(credential)
 
+def update_user(db: Session, user_id: int, user_data: UserUpdate) -> None:
+    """
+    Update an existing user in the database.
+    Args:
+        db (Session): The database session.
+        user_id (int): The ID of the user to update.
+        user_data (UserUpdate): The new data for the user.
+
+    Returns:
+        UserOut: A UserOut schema representing the updated user.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise ValueError("User not found")
+
+    for key, value in user_data.model_dump(exclude_unset=True).items():
+        setattr(user, key, value)
+
+    user.updated_at = datetime.now(timezone.utc)
+    if user_data.firstName or user_data.middleName or user_data.lastName:
+        user.completeName = generate_complete_name(
+            first_name=user.firstName,
+            middle_name=user.middleName or None,
+            last_name=user.lastName
+        )
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(user)
 

@@ -67,3 +67,11 @@ class UserCreate(UserBase):
     model_config = ConfigDict(
         from_attributes=True
     )
+
+class UserUpdate(UserBase):
+    firstName: Optional[str] = None
+    middleName: Optional[str] = None
+    lastName: Optional[str] = None
+    email: Optional[EmailStr] = None
+    mobile: Optional[str] = None
+    role: Optional[str] = None

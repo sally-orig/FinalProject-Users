@@ -11,7 +11,7 @@ from .logger import logger, log_action
 
 token_router = APIRouter()
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 SECRET_KEY = "mysecretkey"
 ALGORITHM = "HS256"
@@ -51,7 +51,7 @@ def authenticate_user(db: Session, username: str, plain_password: str) -> UserOu
         return None
     return UserOut.model_validate(credentials.user).model_dump()
     
-@token_router.post("", status_code=status.HTTP_200_OK, summary="Generate access token", description="Generate an access token for the user.")
+@token_router.post("/token", status_code=status.HTTP_200_OK, summary="Generate access token", description="Generate an access token for the user.")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -89,7 +89,7 @@ def verify_token(token: str):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-@token_router.post("/verify", status_code=status.HTTP_200_OK, summary="Verify access token", description="Verify the provided access token and return user information.")
+@token_router.post("/token/verify", status_code=status.HTTP_200_OK, summary="Verify access token", description="Verify the provided access token and return user information.")
 async def verify_access_token(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     user_id = verify_token(token)
     user = db.query(Credential).filter(Credential.user_id == user_id).first()
@@ -102,4 +102,4 @@ async def verify_access_token(token: str = Depends(oauth2_scheme), db: Session =
             headers={"WWW-Authenticate": "Bearer"}
         )
     log_action(db, user_id=user.id, action=ActionLogEnum.verify_token, status=ActionLogActionsEnum.success)
-    return UserOut.model_validate(user.user).model_dump()
+    return {"message": "Token is valid", "user_id": user.id}
