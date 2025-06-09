@@ -78,9 +78,6 @@ def verify_token(token: str):
         if user_id is None:
             raise HTTPException(**credentials_exception)
         return user_id
-    except JWTError as e:
-        logger.warning(f"Token verification failed: Incorrect username or password")
-        raise HTTPException(**credentials_exception)
     except ExpiredSignatureError:
         logger.warning(f"Token verification failed: Token has expired")
         raise HTTPException(
@@ -88,6 +85,9 @@ def verify_token(token: str):
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    except JWTError as e:
+        logger.warning(f"Token verification failed: Incorrect username or password")
+        raise HTTPException(**credentials_exception)
     
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> UserOut | None:
     user_id = verify_token(token)
