@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from .models import User, Credential
 from .schemas import UserOut, PaginatedResponse, UserCreate, UserUpdate
-from .auth import get_password_hash
+from .auth import get_password_hash, verify_password
 from typing import Optional
 from datetime import datetime, timezone
 
@@ -88,8 +88,12 @@ def create_user(db: Session, user_data: UserCreate) -> None:
         last_name=user_data.lastName
     )
     user = User(**user_dict)
-    db.add(user)
-    db.commit()
+    try:
+        db.add(user)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(user)
     
     credential = Credential(
@@ -97,8 +101,12 @@ def create_user(db: Session, user_data: UserCreate) -> None:
         username=username,
         hashed_password=hashed_password
     )
-    db.add(credential)
-    db.commit()
+    try:
+        db.add(credential)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(credential)
 
 def update_user(db: Session, user_id: int, user_data: UserUpdate) -> None:
@@ -133,4 +141,34 @@ def update_user(db: Session, user_id: int, user_data: UserUpdate) -> None:
         db.rollback()
         raise
     db.refresh(user)
+
+def change_password(db: Session, user_id: int, current_password: str, new_password: str) -> None:
+    """
+    Change the password for a user.
+    Args:
+        db (Session): The database session.
+        user_id (int): The ID of the user whose password is to be changed.
+        current_password (str): The current password of the user to verify.
+        new_password (str): The new password to set.
+
+    Returns:
+        None: This function does not return anything. It commits the new password to the database.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise ValueError("User not found")
+    print(get_password_hash(current_password))
+    credential = db.query(Credential).filter(Credential.user_id == user_id).first()
+    if not verify_password(current_password, credential.hashed_password):
+        raise ValueError("Credential not found")
+
+    credential.hashed_password = get_password_hash(new_password)
+    credential.updated_at = datetime.now(timezone.utc)
+    
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(credential)
 

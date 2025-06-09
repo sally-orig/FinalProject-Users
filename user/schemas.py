@@ -18,6 +18,7 @@ class ActionLogEnum(str, Enum):
     logout = "logout"
     generate_token = "generate_token"
     verify_token = "verify_token"
+    change_password = "change_password"
 
 class ActionLogBase(BaseModel):
     user_id: int
@@ -75,3 +76,11 @@ class UserUpdate(UserBase):
     email: Optional[EmailStr] = None
     mobile: Optional[str] = None
     role: Optional[str] = None
+
+class CredentialUpdate(BaseModel):
+    current_password: str
+    new_password: str
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )

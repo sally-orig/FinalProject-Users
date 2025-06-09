@@ -200,5 +200,47 @@ async def test_update_user_not_found(client, create_user_token):
     TEST_ID = 999
     response = await client.put(f"/users/update/{TEST_ID}", headers={"Authorization": token}, json=update_data)
 
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert response.json() == {"detail": "User not found"}
+
+@pytest.mark.asyncio
+async def test_change_user_password_success(client, create_user_token):
+    token = create_user_token
+    change_data = {
+        "current_password": "testpass",
+        "new_password": "newtestpass"
+    }
+
+    TEST_ID = 1
+    response = await client.put(f"/users/change/password/{TEST_ID}", headers={"Authorization": token}, json=change_data)
+
+    assert response.status_code == 200
+    assert response.json() == {"message": "Password changed successfully"}
+
+@pytest.mark.asyncio
+async def test_change_user_password_not_found(client, create_user_token):
+    token = create_user_token
+    change_data = {
+        "current_password": "testpass",
+        "new_password": "newtestpass"
+    }
+
+    TEST_ID = 999
+    response = await client.put(f"/users/change/password/{TEST_ID}", headers={"Authorization": token}, json=change_data)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "User not found"}
+
+@pytest.mark.asyncio
+async def test_change_user_password_wrong_password(client, create_user_token):
+    token = create_user_token
+    change_data = {
+        "current_password": "wrongpass",
+        "new_password": "newtestpass"
+    }
+
+    TEST_ID = 1
+    response = await client.put(f"/users/change/password/{TEST_ID}", headers={"Authorization": token}, json=change_data)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Credential not found"}
