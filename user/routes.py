@@ -5,6 +5,7 @@ from .db import get_db
 from .schemas import PaginatedResponse, UserOut, StatusEnum, UserCreate, UserUpdate
 from .logger import logger, log_action
 from .schemas import ActionLogEnum, ActionLogActionsEnum
+from .auth import get_current_user
 from typing import Optional
 
 router = APIRouter()
@@ -12,7 +13,7 @@ router = APIRouter()
 @router.get("", response_model=PaginatedResponse, summary="Get all users", description="Retrieve a paginated list of all users.")
 async def get_users(status: Optional[StatusEnum] = Query(None, description="Filter users by status (active/inactive)"), 
                     offset: int = Query(0, ge=0, description="Start index"), limit: int = Query(10, ge=1, description="Maximum number of users to return"), 
-                    db: Session = Depends(get_db)):
+                    db: Session = Depends(get_db), current_user: UserOut = Depends(get_current_user)):
     users = get_all_users(db, offset=offset, limit=limit, status=status)
     if not(users.data):
         logger.warning("GET /users - No users found")
@@ -21,7 +22,7 @@ async def get_users(status: Optional[StatusEnum] = Query(None, description="Filt
     return users
 
 @router.get("/{user_id}", response_model=UserOut, summary="Get user by ID", description="Retrieve a user by their unique ID.")
-async def get_user(user_id: int, db: Session = Depends(get_db)):
+async def get_user(user_id: int, db: Session = Depends(get_db), current_user: UserOut = Depends(get_current_user)):
     user = get_user_by_id(db, user_id)
     if not user:
         logger.warning(f"GET /users/{user_id} - user not found")
@@ -42,7 +43,7 @@ async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
     return {"message": "User created successfully"}
 
 @router.put("/update/{user_id}", response_model=None, status_code=status.HTTP_200_OK, summary="Update user details", description="Update the details of an existing user.")
-async def update_user_by_id(user_id: int, user_data: UserUpdate, db: Session = Depends(get_db)):
+async def update_user_by_id(user_id: int, user_data: UserUpdate, db: Session = Depends(get_db), current_user: UserOut = Depends(get_current_user)):
     try:
         update_user(db, user_id, user_data)
     except ValueError as e:

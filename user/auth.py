@@ -56,7 +56,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         logger.warning(f"Failed login: username={form_data.username}")
-        log_action(db, user_name=form_data.username, action=ActionLogEnum.login, status=ActionLogActionsEnum.failed)
+        log_action(db, username=form_data.username, action=ActionLogEnum.login, status=ActionLogActionsEnum.failed)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, 
             detail="Incorrect username or password",
@@ -88,9 +88,8 @@ def verify_token(token: str):
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-@token_router.post("/token/verify", status_code=status.HTTP_200_OK, summary="Verify access token", description="Verify the provided access token and return user information.")
-async def verify_access_token(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> UserOut | None:
     user_id = verify_token(token)
     user = db.query(Credential).filter(Credential.user_id == user_id).first()
     if not user:
@@ -102,4 +101,10 @@ async def verify_access_token(token: str = Depends(oauth2_scheme), db: Session =
             headers={"WWW-Authenticate": "Bearer"}
         )
     log_action(db, user_id=user.id, action=ActionLogEnum.verify_token, status=ActionLogActionsEnum.success)
-    return {"message": "Token is valid", "user_id": user.id}
+    return user
+
+@token_router.post("/token/verify", status_code=status.HTTP_200_OK, summary="Verify access token", description="Verify the provided access token and return user information.")
+async def verify_access_token(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db), current_user: UserOut = Depends(get_current_user)):
+    """Verify the provided access token and return user information."""
+    if current_user:
+        return {"message": "Token is valid", "user_id": current_user.id}
