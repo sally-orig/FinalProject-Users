@@ -103,8 +103,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     log_action(db, user_id=user.id, action=ActionLogEnum.verify_token, status=ActionLogActionsEnum.success)
     return user
 
-@token_router.post("/token/verify", status_code=status.HTTP_200_OK, summary="Verify access token", description="Verify the provided access token and return user information.")
+@token_router.post("/token/verify", response_model=UserOut, status_code=status.HTTP_200_OK, summary="Verify access token", description="Verify the provided access token and return user information.")
 async def verify_access_token(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db), current_user: UserOut = Depends(get_current_user)):
     """Verify the provided access token and return user information."""
     if current_user:
-        return {"message": "Token is valid", "user_id": current_user.id}
+        return current_user.user
