@@ -133,7 +133,8 @@ async def refresh_access_token(refresh_token: str = Body(embed=True)):
 
         return {
             "access_token": new_access_token,
-            "refresh_token": new_refresh_token
+            "refresh_token": new_refresh_token,
+            "token_type": "bearer"
         }
     except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expired")
