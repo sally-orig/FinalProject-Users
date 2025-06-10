@@ -109,7 +109,7 @@ def create_user(db: Session, user_data: UserCreate) -> None:
         raise
     db.refresh(credential)
 
-def update_user(db: Session, user_id: int, user_data: UserUpdate) -> None:
+def update_user(db: Session, user_id: int, user_data: UserUpdate) -> UserOut:
     """
     Update an existing user in the database.
     Args:
@@ -141,6 +141,8 @@ def update_user(db: Session, user_id: int, user_data: UserUpdate) -> None:
         db.rollback()
         raise
     db.refresh(user)
+
+    return UserOut.model_validate(user).model_dump()
 
 def change_password(db: Session, user_id: int, current_password: str, new_password: str) -> None:
     """

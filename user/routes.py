@@ -47,10 +47,10 @@ async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
     log_action(db, username=user_data.username, action=ActionLogEnum.register_user, status=ActionLogActionsEnum.success)
     return {"message": "User created successfully"}
 
-@router.put("/update/{user_id}", response_model=None, status_code=status.HTTP_200_OK, summary="Update user details", description="Update the details of an existing user.")
+@router.put("/update/{user_id}", response_model=UserOut, status_code=status.HTTP_200_OK, summary="Update user details", description="Update the details of an existing user.")
 async def update_user_by_id(user_id: int, user_data: UserUpdate, db: Session = Depends(get_db), current_user: UserOut = Depends(get_current_user)):
     try:
-        update_user(db, user_id, user_data)
+        user = update_user(db, user_id, user_data)
     except ValueError as e:
         logger.error(f"Update failed for user ID {user_id}: {str(e)}")
         log_action(db, user_id=user_id, action=ActionLogEnum.update_user, status=ActionLogActionsEnum.failed)
@@ -62,7 +62,7 @@ async def update_user_by_id(user_id: int, user_data: UserUpdate, db: Session = D
     
     logger.info(f"User updated successfully: user_id={user_id}")
     log_action(db, user_id=user_id, action=ActionLogEnum.update_user, status=ActionLogActionsEnum.success)
-    return {"message": "User updated successfully"}
+    return user
 
 @router.put("/change/password/{user_id}", status_code=status.HTTP_200_OK, summary="Change user password", description="Change the password of an existing user.")
 async def change_user_password(user_id: int, body: CredentialUpdate, db: Session = Depends(get_db), current_user: UserOut = Depends(get_current_user)):

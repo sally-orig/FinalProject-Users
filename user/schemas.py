@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, validator
 from enum import Enum
 from datetime import datetime
 from typing import Optional, List, Any
@@ -56,6 +56,7 @@ class UserOut(UserBase):
     completeName: str
     status: StatusEnum = StatusEnum.active
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(
         from_attributes=True
@@ -64,6 +65,7 @@ class UserOut(UserBase):
 class UserCreate(UserBase):
     username: str
     plain_password: str
+    mobile: str = Field(..., min_length=10, max_length=11, pattern=r'^\d+$')
 
     model_config = ConfigDict(
         from_attributes=True
@@ -74,7 +76,7 @@ class UserUpdate(UserBase):
     middleName: Optional[str] = None
     lastName: Optional[str] = None
     email: Optional[EmailStr] = None
-    mobile: Optional[str] = None
+    mobile: Optional[str] = Field(default=None, min_length=10, max_length=11, pattern=r'^\d+$')
     role: Optional[str] = None
 
 class CredentialUpdate(BaseModel):

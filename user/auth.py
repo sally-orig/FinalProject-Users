@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, UTC
 from jose import jwt, JWTError, ExpiredSignatureError
 from passlib.context import CryptContext
-from fastapi import HTTPException, status, APIRouter, Depends, HTTPException, Header
+from fastapi import HTTPException, status, APIRouter, Depends, Header, Body
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from .models import Credential
@@ -16,6 +16,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 SECRET_KEY = "mysecretkey"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_DAYS = 7
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -28,7 +29,13 @@ def get_password_hash(plain_password):
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
     expire = datetime.now(UTC) + (expires_delta if expires_delta else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "token_type": "access"})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def create_refresh_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(UTC) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "token_type": "refresh"})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 credentials_exception = {
@@ -63,11 +70,12 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
             headers={"WWW-Authenticate": "Bearer"}
         )
     access_token = create_access_token(data={"sub": str(user["id"])})
+    refresh_token = create_refresh_token(data={"sub": str(user["id"])})
     logger.info(f"Token issued: user_id={str(user['id'])}")
     log_action(db, user_id=user["id"], action=ActionLogEnum.login, status=ActionLogActionsEnum.success)
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": access_token, "token_type": "bearer", "refresh_token": refresh_token}
 
-def verify_token(token: str):
+def verify_access_token(token: str):
     logger.info(f"Token verification attempt")
     if not token or token.lower() == "undefined":
         logger.warning(f"Token verification failed: Invalid or missing token")
@@ -75,8 +83,16 @@ def verify_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: int = int(payload.get("sub"))
+        token_type: str = payload.get("token_type")
         if user_id is None:
             raise HTTPException(**credentials_exception)
+        elif token_type != "access":
+            logger.warning(f"Token verification failed: Invalid token type {token_type}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return user_id
     except ExpiredSignatureError:
         logger.warning(f"Token verification failed: Token has expired")
@@ -90,7 +106,7 @@ def verify_token(token: str):
         raise HTTPException(**credentials_exception)
     
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> UserOut | None:
-    user_id = verify_token(token)
+    user_id = verify_access_token(token)
     user = db.query(Credential).filter(Credential.user_id == user_id).first()
     if not user:
         logger.warning(f"Token verification failed: User not found for user_id={user_id}")
@@ -103,8 +119,23 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     log_action(db, user_id=user.id, action=ActionLogEnum.verify_token, status=ActionLogActionsEnum.success)
     return user
 
-@token_router.post("/token/verify", include_in_schema=False, response_model=UserOut, status_code=status.HTTP_200_OK, summary="Verify access token", description="Verify the provided access token and return user information.")
-async def verify_access_token(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db), current_user: UserOut = Depends(get_current_user)):
-    """Verify the provided access token and return user information."""
-    if current_user:
-        return current_user.user
+@token_router.post("/token/refresh", status_code=status.HTTP_200_OK, summary="Refresh access token", description="Refresh the provided access token and return a new one.")
+async def refresh_access_token(refresh_token: str = Body(embed=True)):
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("token_type") != "refresh":
+            raise HTTPException(status_code=400, detail="Invalid token type")
+
+        user_id = payload.get("sub")
+
+        new_access_token = create_access_token({"sub": user_id})
+        new_refresh_token = create_refresh_token({"sub": user_id})
+
+        return {
+            "access_token": new_access_token,
+            "refresh_token": new_refresh_token
+        }
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
