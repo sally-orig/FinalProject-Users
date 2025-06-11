@@ -38,11 +38,13 @@ def create_refresh_token(data: dict):
     to_encode.update({"exp": expire, "token_type": "refresh"})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-credentials_exception = {
-    "status_code": status.HTTP_401_UNAUTHORIZED,
-    "detail": "Could not validate credentials",
-    "headers": {"WWW-Authenticate": "Bearer"},
-}
+def generate_401_exception(detail: str):
+    """Generate a 401 HTTPException with the given detail."""
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"}
+    )
     
 def authenticate_user(db: Session, username: str, plain_password: str) -> UserOut | None:
     """Authenticate a user by username and password.
@@ -64,11 +66,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     if not user:
         logger.warning(f"Failed login: username={form_data.username}")
         log_action(db, username=form_data.username, action=ActionLogEnum.login, status=ActionLogActionsEnum.failed)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
+        raise generate_401_exception(detail="Incorrect username or password")
     access_token = create_access_token(data={"sub": str(user["id"])})
     refresh_token = create_refresh_token(data={"sub": str(user["id"])})
     logger.info(f"Token issued: user_id={str(user['id'])}")
@@ -76,34 +74,27 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     return {"access_token": access_token, "token_type": "bearer", "refresh_token": refresh_token}
 
 def verify_access_token(token: str):
-    logger.info(f"Token verification attempt")
+    logger.info(f"Access token verification attempt")
     if not token or token.lower() == "undefined":
-        logger.warning(f"Token verification failed: Invalid or missing token")
-        raise HTTPException(status_code=401, detail="Invalid or missing token")
+        logger.warning(f"Access token verification failed: Invalid or missing token")
+        raise generate_401_exception(detail="Invalid or missing access token")
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = int(payload.get("sub"))
+        user_id: int = payload.get("sub")
         token_type: str = payload.get("token_type")
         if user_id is None:
-            raise HTTPException(**credentials_exception)
+            logger.warning(f"Access token verification failed: User ID not found in token")
+            raise generate_401_exception(detail="User ID not found in token")
         elif token_type != "access":
-            logger.warning(f"Token verification failed: Invalid token type {token_type}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token type",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        return user_id
+            logger.warning(f"Access token verification failed: Invalid token type {token_type}")
+            raise generate_401_exception(detail="Invalid token type")
+        return int(user_id)
     except ExpiredSignatureError:
-        logger.warning(f"Token verification failed: Token has expired")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        logger.warning(f"Access token verification failed: token has expired")
+        raise generate_401_exception(detail="Token has expired")
     except JWTError as e:
-        logger.warning(f"Token verification failed: Incorrect username or password")
-        raise HTTPException(**credentials_exception)
+        logger.warning(f"Token verification failed: {str(e)}")
+        raise generate_401_exception(detail=str(e))
     
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> UserOut | None:
     user_id = verify_access_token(token)
@@ -111,11 +102,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if not user:
         logger.warning(f"Token verification failed: User not found for user_id={user_id}")
         log_action(db, user_id=user["id"], action=ActionLogEnum.verify_token, status=ActionLogActionsEnum.failed)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
+        raise generate_401_exception(detail="User not found")
+    logger.warning(f"Token verification success for user_id={user_id}")
     log_action(db, user_id=user.id, action=ActionLogEnum.verify_token, status=ActionLogActionsEnum.success)
     return user
 
@@ -124,10 +112,14 @@ async def refresh_access_token(refresh_token: str = Body(embed=True)):
     try:
         payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
         if payload.get("token_type") != "refresh":
-            raise HTTPException(status_code=400, detail="Invalid token type")
+            logger.warning(f"Refresh token verification failed: Invalid token type")
+            raise generate_401_exception(detail="Invalid token type")
 
         user_id = payload.get("sub")
-
+        if not user_id:
+            logger.warning(f"Refresh token verification failed: User not found for user_id={user_id}")
+            raise generate_401_exception(detail="User not found in refresh token")
+        
         new_access_token = create_access_token({"sub": user_id})
         new_refresh_token = create_refresh_token({"sub": user_id})
 
@@ -137,6 +129,8 @@ async def refresh_access_token(refresh_token: str = Body(embed=True)):
             "token_type": "bearer"
         }
     except ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Refresh token expired")
+        logger.warning(f"Refresh token verification failed: Refresh token has expired")
+        raise generate_401_exception(detail="Refresh token has expired")
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        logger.warning(f"Refresh token verification failed: Invalid refresh token")
+        raise generate_401_exception(detail="Invalid refresh token")

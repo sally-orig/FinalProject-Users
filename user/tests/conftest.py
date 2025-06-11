@@ -52,3 +52,37 @@ async def create_user_token(client: AsyncClient):
     assert response.status_code == 200, f"Token generation failed: {response.text}"
     token = response.json()["access_token"]
     return f"Bearer {str(token)}"
+
+@pytest.fixture
+async def create_user_for_auth(client: AsyncClient):
+    db = TestingSessionLocal()
+    try:
+        user = User(
+            email="call@gmil.com",
+            mobile="09231111890",
+            firstName="Call",
+            middleName="Me",
+            lastName="Maybe",
+            completeName="Call Me Maybe",
+            role="HR",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        credential = Credential(
+            user_id=user.id,
+            username="testuser",
+            hashed_password=get_password_hash("testpass"),
+        )
+        db.add(credential)
+        db.commit()
+    finally:
+        db.close()
+
+    response = await client.post(
+        "/auth/token",
+        data={"username": "testuser", "password": "testpass"},
+    )
+    assert response.status_code == 200, f"Token generation failed: {response.text}"
+    return response.json()

@@ -168,6 +168,71 @@ async def test_register_user_fail_duplicate_email(client):
     assert response.json() == {"detail": "Email already exists"}
 
 @pytest.mark.asyncio
+async def test_invalid_email(client, create_user_token):
+    token = create_user_token
+    user_data = {
+        "email": "invalid-email",
+        "mobile": "09123456789",
+        "firstName": "Invalid",
+        "middleName": "Email",
+        "lastName": "Test",
+        "username": "invaliduser",
+        "plain_password": "invalidpassword",
+        "role": "User"
+    }
+
+    response = await client.post("/users/register", headers={"Authorization": token}, json=user_data)
+    assert response.status_code == 422
+
+@pytest.mark.asyncio
+async def test_invalid_mobile_too_short(client, create_user_token):
+    token = create_user_token
+    user_data = {
+        "email": "duplicate@example.com",
+        "mobile": "091234567",
+        "firstName": "Another",
+        "middleName": "Test",
+        "lastName": "User",
+        "username": "testuser",
+        "plain_password": "testpass",
+        "role": "User"
+    }
+    response = await client.post("/users/register", headers={"Authorization": token}, json=user_data)
+    assert response.status_code == 422
+
+@pytest.mark.asyncio
+async def test_invalid_mobile_too_long(client, create_user_token):
+    token = create_user_token
+    user_data = {
+        "email": "duplicate@example.com",
+        "mobile": "091234567090090",
+        "firstName": "Another",
+        "middleName": "Test",
+        "lastName": "User",
+        "username": "testuser",
+        "plain_password": "testpass",
+        "role": "User"
+    }
+    response = await client.post("/users/register", headers={"Authorization": token}, json=user_data)
+    assert response.status_code == 422
+
+@pytest.mark.asyncio
+async def test_invalid_mobile_not_numeric(client, create_user_token):
+    token = create_user_token
+    user_data = {
+        "email": "duplicate@example.com",
+        "mobile": "string",
+        "firstName": "Another",
+        "middleName": "Test",
+        "lastName": "User",
+        "username": "testuser",
+        "plain_password": "testpass",
+        "role": "User"
+    }
+    response = await client.post("/users/register", headers={"Authorization": token}, json=user_data)
+    assert response.status_code == 422
+
+@pytest.mark.asyncio
 async def test_update_user_success(client, create_user_token):
     token = create_user_token
     update_data = {
@@ -183,7 +248,16 @@ async def test_update_user_success(client, create_user_token):
     response = await client.put(f"/users/update/{TEST_ID}", headers={"Authorization": token}, json=update_data)
 
     assert response.status_code == 200
-    assert response.json() == {"message": "User updated successfully"}
+    data = response.json()
+    assert data["id"] == TEST_ID
+    assert data["email"] == "updated@example.com"
+    assert data["mobile"] == "09112223333"
+    assert data["firstName"] == "Updated"
+    assert data["middleName"] == "User"
+    assert data["lastName"] == "Example"
+    assert data["completeName"] == "Updated User Example"
+    assert data["role"] == "Admin"
+    assert data["status"] == "inactive"
 
 @pytest.mark.asyncio
 async def test_update_user_not_found(client, create_user_token):
@@ -202,6 +276,71 @@ async def test_update_user_not_found(client, create_user_token):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "User not found"}
+
+@pytest.mark.asyncio
+async def test_update_user_invalid_email(client, create_user_token):
+    token = create_user_token
+    user_data = {
+        "email": "invalid-email",
+        "mobile": "09123456789",
+        "firstName": "Invalid",
+        "middleName": "Email",
+        "lastName": "Test",
+        "username": "invaliduser",
+        "plain_password": "invalidpassword",
+        "role": "User"
+    }
+
+    response = await client.put("/users/update/1", headers={"Authorization": token}, json=user_data)
+    assert response.status_code == 422
+
+@pytest.mark.asyncio
+async def test_update_user_invalid_mobile_too_short(client, create_user_token):
+    token = create_user_token
+    user_data = {
+        "email": "duplicate@example.com",
+        "mobile": "091234567",
+        "firstName": "Another",
+        "middleName": "Test",
+        "lastName": "User",
+        "username": "testuser",
+        "plain_password": "testpass",
+        "role": "User"
+    }
+    response = await client.put("/users/update/1", headers={"Authorization": token}, json=user_data)
+    assert response.status_code == 422
+
+@pytest.mark.asyncio
+async def test_update_user_invalid_mobile_too_long(client, create_user_token):
+    token = create_user_token
+    user_data = {
+        "email": "duplicate@example.com",
+        "mobile": "091234567090090",
+        "firstName": "Another",
+        "middleName": "Test",
+        "lastName": "User",
+        "username": "testuser",
+        "plain_password": "testpass",
+        "role": "User"
+    }
+    response = await client.put("/users/update/1", headers={"Authorization": token}, json=user_data)
+    assert response.status_code == 422
+
+@pytest.mark.asyncio
+async def test_update_user_invalid_mobile_not_numeric(client, create_user_token):
+    token = create_user_token
+    user_data = {
+        "email": "duplicate@example.com",
+        "mobile": "string",
+        "firstName": "Another",
+        "middleName": "Test",
+        "lastName": "User",
+        "username": "testuser",
+        "plain_password": "testpass",
+        "role": "User"
+    }
+    response = await client.put("/users/update/1", headers={"Authorization": token}, json=user_data)
+    assert response.status_code == 422
 
 @pytest.mark.asyncio
 async def test_change_user_password_success(client, create_user_token):
