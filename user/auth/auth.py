@@ -1,5 +1,5 @@
 from passlib.context import CryptContext
-from fastapi import status, APIRouter, Depends, Body
+from fastapi import status, APIRouter, Depends, Body, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -7,7 +7,7 @@ from ..models import Credential, RefreshToken
 from ..schemas import UserOut, ActionLogEnum, ActionLogActionsEnum
 from ..db import get_db
 from ..logger import logger, log_action
-from .token_utils import create_access_token, create_refresh_token, decode_token, generate_401_exception, verify_access_token
+from .token_utils import create_access_token, create_refresh_token, decode_token, generate_401_exception, generate_400_exception, verify_access_token
 
 token_router = APIRouter()
 
@@ -51,12 +51,12 @@ def save_refresh_token(db: Session, refresh_token: str):
     """Save the refresh token to the database."""
     payload = decode_token(refresh_token)
     expiry = datetime.fromtimestamp(payload.get("exp"), timezone.utc) if payload.get("exp") else None
-    if not expiry or not payload.get("sub"):
+    if not expiry or not payload.get("sub") or not payload.get("jti"):
         logger.error("Invalid refresh token payload")
         raise generate_401_exception(detail="Invalid refresh token payload")
     
     db_token = RefreshToken(
-        token=refresh_token,
+        jti=payload.get("jti"),
         user_id=payload.get("sub"),
         expires_at=expiry
     )
@@ -66,6 +66,49 @@ def save_refresh_token(db: Session, refresh_token: str):
     except Exception:
         db.rollback()
         raise
+
+def revoke_refresh_token(jti: str, db: Session) -> None:
+    """Revoke a refresh token."""
+    if not jti:
+        logger.warning(f"Refresh token verification failed: JTI not found in token")
+        raise generate_400_exception("JTI not found in token")
+    db_token = db.query(RefreshToken).filter(RefreshToken.jti == jti).first()
+    if not db_token or db_token.revoked or db_token.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        logger.warning(f"Refresh token verification failed: Token invalid/expired")
+        raise generate_400_exception("Refresh token is invalid or expired")
+    
+    db_token.revoked = True
+    db_token.revoked_at = datetime.now(timezone.utc)
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to revoke refresh token: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to revoke refresh token"
+        )
+
+    db.refresh(db_token)
+
+def verify_refresh_token(refresh_token: str, db: Session) -> str:
+    """Verify the provided refresh token and return the associated user."""
+    if not refresh_token or refresh_token.lower() == "undefined":
+        logger.warning("Refresh token verification failed: Invalid or missing token")
+        raise generate_400_exception("Invalid or missing refresh token")
+
+    payload = decode_token(refresh_token)
+    user_id = payload.get("sub")
+    if payload.get("token_type") != "refresh":
+        logger.warning(f"Refresh token verification failed: Invalid token type")
+        raise generate_400_exception(detail="Invalid token type")
+    if not user_id:
+        logger.warning(f"Refresh token verification failed: User not found for user_id={user_id}")
+        raise generate_400_exception(detail="User not found in refresh token")
+
+    revoke_refresh_token(payload.get("jti"), db)
+
+    return user_id
     
 @token_router.post("/token", status_code=status.HTTP_200_OK, summary="Generate access token", description="Generate an access token for the user.")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -88,29 +131,9 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     }
 
 @token_router.post("/token/refresh", status_code=status.HTTP_200_OK, summary="Refresh access token", description="Refresh the provided access token and return a new one.")
-async def refresh_access_token(refresh_token: str = Body(embed=True), db: Session = Depends(get_db)):
+async def refresh_access_token(refresh_token: str = Body(embed=True), db: Session = Depends(get_db), current_user: UserOut = Depends(get_current_user)):
     logger.info(f"Refresh token verification attempt")
-    if not refresh_token or refresh_token.lower() == "undefined":
-        logger.warning("Refresh token verification failed: Invalid or missing token")
-        raise generate_401_exception("Invalid or missing refresh token")
-
-    payload = decode_token(refresh_token)
-    user_id = payload.get("sub")
-    if payload.get("token_type") != "refresh":
-        logger.warning(f"Refresh token verification failed: Invalid token type")
-        raise generate_401_exception(detail="Invalid token type")
-    if not user_id:
-        logger.warning(f"Refresh token verification failed: User not found for user_id={user_id}")
-        raise generate_401_exception(detail="User not found in refresh token")
-        
-    db_token = db.query(RefreshToken).filter(RefreshToken.token == refresh_token).first()
-    if not db_token or db_token.revoked or db_token.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
-        logger.warning(f"Refresh token verification failed: Token invalid/expired for user_id={user_id}")
-        raise generate_401_exception(detail="Refresh token is invalid or expired")
-    
-    db_token.revoked = True
-    db.commit()
-    db.refresh(db_token)
+    user_id = verify_refresh_token(refresh_token, db)
     
     new_access_token = create_access_token({"sub": user_id})
     new_refresh_token = create_refresh_token({"sub": user_id})

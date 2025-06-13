@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
-from .models import User, Credential
+from .models import User, Credential, RefreshToken
 from .schemas import UserOut, PaginatedResponse, UserCreate, UserUpdate
-from .auth.auth import get_password_hash, verify_password
+from .auth.auth import get_password_hash, verify_password, verify_refresh_token
 from typing import Optional
 from datetime import datetime, timezone
 
@@ -144,7 +144,7 @@ def update_user(db: Session, user_id: int, user_data: UserUpdate) -> UserOut:
 
     return UserOut.model_validate(user).model_dump()
 
-def change_password(db: Session, user_id: int, current_password: str, new_password: str) -> None:
+def change_password(db: Session, user_id: int, current_password: str, new_password: str, refresh_token: str) -> None:
     """
     Change the password for a user.
     Args:
@@ -152,6 +152,7 @@ def change_password(db: Session, user_id: int, current_password: str, new_passwo
         user_id (int): The ID of the user whose password is to be changed.
         current_password (str): The current password of the user to verify.
         new_password (str): The new password to set.
+        refresh_token (str): The refresh token to invalidate after password change.
 
     Returns:
         None: This function does not return anything. It commits the new password to the database.
@@ -173,4 +174,6 @@ def change_password(db: Session, user_id: int, current_password: str, new_passwo
         db.rollback()
         raise
     db.refresh(credential)
+
+    user_id_from_token = verify_refresh_token(refresh_token, db)
 

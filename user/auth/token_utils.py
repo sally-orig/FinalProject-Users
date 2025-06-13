@@ -20,6 +20,13 @@ def generate_401_exception(detail: str):
         headers={"WWW-Authenticate": "Bearer"}
     )
 
+def generate_400_exception(detail: str):
+    """Generate a 404 HTTPException with the given detail."""
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=detail
+    )
+
 def create_token(data: dict, expires_delta: timedelta, token_type: Literal["access", "refresh"]) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + expires_delta

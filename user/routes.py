@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from sqlalchemy.orm import Session
 from .crud import get_all_users, get_user_by_id, create_user, update_user, change_password
 from .db import get_db
@@ -65,9 +65,9 @@ async def update_user_by_id(user_id: int, user_data: UserUpdate, db: Session = D
     return user
 
 @router.put("/change/password/{user_id}", status_code=status.HTTP_200_OK, summary="Change user password", description="Change the password of an existing user.")
-async def change_user_password(user_id: int, body: CredentialUpdate, db: Session = Depends(get_db), current_user: UserOut = Depends(get_current_user)):
+async def change_user_password(user_id: int, body: CredentialUpdate, refresh_token: str = Body(embed=True), db: Session = Depends(get_db), current_user: UserOut = Depends(get_current_user)):
     try:
-        change_password(db, user_id, body.current_password, body.new_password)
+        change_password(db, user_id, body.current_password, body.new_password, refresh_token)
         logger.info(f"Changed password successfully for user ID: {user_id}")
         log_action(db, user_id=user_id, action=ActionLogEnum.change_password, status=ActionLogActionsEnum.success)
     except ValueError as e:

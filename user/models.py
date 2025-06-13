@@ -48,9 +48,10 @@ class RefreshToken(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    token = Column(String(255), unique=True, nullable=False)
+    jti = Column(String(255), unique=True, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.now(timezone.utc))
     expires_at = Column(DateTime(timezone=True), nullable=False)
     revoked = Column(Boolean, default=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
 
     user = relationship("User", back_populates="refresh_tokens")
