@@ -1,8 +1,8 @@
-"""Initial Migration - create user table
+"""change datetime to timezone-aware
 
-Revision ID: 57f91e4ff63f
-Revises: 
-Create Date: 2025-06-02 14:16:34.389745
+Revision ID: c169f2ac42de
+Revises: ffe9dcfd3072
+Create Date: 2025-06-12 17:49:46.689727
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '57f91e4ff63f'
-down_revision: Union[str, None] = None
+revision: str = 'c169f2ac42de'
+down_revision: Union[str, None] = 'ffe9dcfd3072'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

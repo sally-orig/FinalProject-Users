@@ -1,0 +1,29 @@
+{
+  "family": "fastapi-users-task",
+  "taskRoleArn": "arn:aws:iam::904006574533:role/ecsTaskExecutionRole",
+  "executionRoleArn": "arn:aws:iam::904006574533:role/ecsTaskExecutionRole",
+  "networkMode": "awsvpc",
+  "containerDefinitions": [
+    {
+      "name": "fastapi-users",
+      "image": "904006574533.dkr.ecr.us-east-1.amazonaws.com/fastapi-users:latest",
+      "cpu": 0,
+      "portMappings": [
+        {
+          "containerPort": 8085,
+          "hostPort": 8085,
+          "protocol": "tcp",
+          "appProtocol": "http"
+        }
+      ],
+      "essential": true
+    }
+  ],
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+    }
+}
