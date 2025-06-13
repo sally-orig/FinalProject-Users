@@ -11,7 +11,7 @@ from uuid import uuid4
 from ..auth.auth import SECRET_KEY, ALGORITHM
 
 @pytest.mark.asyncio
-async def test_token_endpoint():
+async def test_token_success():
     db = TestingSessionLocal()
     try:
         user = User(
@@ -102,19 +102,21 @@ async def test_access_token_errors(client, token_payload, expected_detail):
         # invalid signature
         ({"sub": "1", "exp": datetime.now(UTC) + timedelta(days=30), "token_type": "refresh", "jti": str(uuid4())}, "invalidsecret", 401, "Invalid token"),
         # invalid token type
-        ({"sub": "1", "exp": datetime.now(UTC) + timedelta(days=7), "token_type": "access", "jti": str(uuid4())}, SECRET_KEY, 401, "Invalid token type"),
+        ({"sub": "1", "exp": datetime.now(UTC) + timedelta(days=7), "token_type": "access", "jti": str(uuid4())}, SECRET_KEY, 400, "Invalid token type"),
     ]
 )
-async def test_refresh_token_errors(client, refresh_token_payload, secret, expected_status, expected_detail):
+async def test_refresh_token_errors(client, create_user_token, refresh_token_payload, secret, expected_status, expected_detail):
+    user = create_user_token
     access_token_payload = {"sub": "1", "exp": datetime.now(UTC) + timedelta(minutes=30), "token_type": "access", "jti": str(uuid4())}
     access_token = jwt.encode(access_token_payload, SECRET_KEY, algorithm=ALGORITHM)
     refresh_token = jwt.encode(refresh_token_payload, secret, algorithm=ALGORITHM)
+    jti = refresh_token_payload.get("jti")
 
     # Insert the refresh token in DB if this is the success case to simulate valid token
     if expected_status == 200:
         db = TestingSessionLocal()
         db_token = RefreshToken(
-            token=refresh_token,
+            jti=jti,
             user_id=1,
             expires_at=datetime.now(UTC) + timedelta(days=30)
         )
@@ -128,7 +130,7 @@ async def test_refresh_token_errors(client, refresh_token_payload, secret, expec
         headers={"Authorization": f"Bearer {access_token}"},
         json={"refresh_token": refresh_token},
     )
-
+    print(response.json())  # For debugging purposes
     assert response.status_code == expected_status
     if expected_detail:
         assert response.json() == {"detail": expected_detail}

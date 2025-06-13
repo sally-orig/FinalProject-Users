@@ -79,4 +79,4 @@ async def change_user_password(user_id: int, body: CredentialUpdate, refresh_tok
         log_action(db, user_id=user_id, action=ActionLogEnum.change_password, status=ActionLogActionsEnum.failed)
         raise HTTPException(status_code=500, detail="Internal server error")
     
-    return {"message": "Password changed successfully"}
+    return {"detail": "Password changed successfully"}

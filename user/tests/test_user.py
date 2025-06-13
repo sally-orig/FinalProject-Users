@@ -7,14 +7,24 @@ from unittest.mock import MagicMock
 
 # Test cases for get all users
 @pytest.mark.asyncio
-async def test_get_all_users(client, create_user_token):
+@pytest.mark.parametrize("offset, limit, status, expected_count", [
+    (0, 10, None, 3),  # Default case
+    (1, 2, None, 2),   # Offset by 1, limit to 2
+    (0, 2, None, 2),   # Limit to 2
+    (0, 5, None, 3),    # Limit greater than total count
+    (0, 10, "active", 2),  # Filter by active status
+])
+async def test_get_all_users(client, create_user_token, offset, limit, status, expected_count):
     token = create_user_token
-    response = await client.get("/users", headers={"Authorization": token})
+    params = {"offset": offset, "limit": limit}
+    if status:
+        params["status"] = status
+    response = await client.get("/users", headers={"Authorization": token}, params=params)
 
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data["data"], list)
-    assert len(data["data"]) == 3
+    assert len(data["data"]) == expected_count
 
 @pytest.mark.asyncio
 async def test_get_all_users_empty_db(client, create_user_token):
@@ -133,13 +143,17 @@ async def test_register_user_fail_duplicate_email_username (client, email1, emai
     assert response.json() == {"detail": expected_detail}
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mobile, email,expected_status", [
-    ("11", "duplicate@example.com", 422),
-    ("091234567890", "duplicate@example.com", 422),
-    ("string", "duplicate@example.com", 422),
-    ("09112222222", "invalid-email", 422),
+@pytest.mark.parametrize("method, endpoint, mobile, email,expected_status", [
+    ("post", "register", "11", "duplicate@example.com", 422), # Too short mobile: /register
+    ("post", "register", "091234567890", "duplicate@example.com", 422), # Too long mobile: /register
+    ("post", "register", "string", "duplicate@example.com", 422), # Invalid mobile: /register
+    ("post", "register", "09112222222", "invalid-email", 422), # Invalid email: /register
+    ("put", "update/1", "11", "duplicate@example.com", 422), # Too short mobile: /update/1
+    ("put", "update/1", "091234567890", "duplicate@example.com", 422), # Too long mobile: /update/1
+    ("put", "update/1", "string", "duplicate@example.com", 422), # Invalid mobile: /update/1
+    ("put", "update/1", "09112222222", "invalid-email", 422), # Invalid email: /update/1
 ])
-async def test_register_user_invalid_mobile_email(client, create_user_token, mobile, email, expected_status):
+async def test_user_invalid_mobile_email(client, create_user_token, method, endpoint, mobile, email, expected_status):
     token = create_user_token
     user_data = {
         "email": email,
@@ -151,7 +165,8 @@ async def test_register_user_invalid_mobile_email(client, create_user_token, mob
         "plain_password": "testpass",
         "role": "User"
     }
-    response = await client.post("/users/register", headers={"Authorization": token}, json=user_data)
+    request_method = getattr(client, method.lower())
+    response = await request_method(f"/users/{endpoint}", headers={"Authorization": token}, json=user_data)
     assert response.status_code == expected_status
 
 @pytest.mark.asyncio
@@ -200,108 +215,43 @@ async def test_update_user_not_found(client, create_user_token):
     assert response.json() == {"detail": "User not found"}
 
 @pytest.mark.asyncio
-async def test_update_user_invalid_email(client, create_user_token):
-    token = create_user_token
-    user_data = {
-        "email": "invalid-email",
-        "mobile": "09123456789",
-        "firstName": "Invalid",
-        "middleName": "Email",
-        "lastName": "Test",
-        "username": "invaliduser",
-        "plain_password": "invalidpassword",
-        "role": "User"
-    }
-
-    response = await client.put("/users/update/1", headers={"Authorization": token}, json=user_data)
-    assert response.status_code == 422
-
-@pytest.mark.asyncio
-async def test_update_user_invalid_mobile_too_short(client, create_user_token):
-    token = create_user_token
-    user_data = {
-        "email": "duplicate@example.com",
-        "mobile": "091234567",
-        "firstName": "Another",
-        "middleName": "Test",
-        "lastName": "User",
-        "username": "testuser",
-        "plain_password": "testpass",
-        "role": "User"
-    }
-    response = await client.put("/users/update/1", headers={"Authorization": token}, json=user_data)
-    assert response.status_code == 422
-
-@pytest.mark.asyncio
-async def test_update_user_invalid_mobile_too_long(client, create_user_token):
-    token = create_user_token
-    user_data = {
-        "email": "duplicate@example.com",
-        "mobile": "091234567090090",
-        "firstName": "Another",
-        "middleName": "Test",
-        "lastName": "User",
-        "username": "testuser",
-        "plain_password": "testpass",
-        "role": "User"
-    }
-    response = await client.put("/users/update/1", headers={"Authorization": token}, json=user_data)
-    assert response.status_code == 422
-
-@pytest.mark.asyncio
-async def test_update_user_invalid_mobile_not_numeric(client, create_user_token):
-    token = create_user_token
-    user_data = {
-        "email": "duplicate@example.com",
-        "mobile": "string",
-        "firstName": "Another",
-        "middleName": "Test",
-        "lastName": "User",
-        "username": "testuser",
-        "plain_password": "testpass",
-        "role": "User"
-    }
-    response = await client.put("/users/update/1", headers={"Authorization": token}, json=user_data)
-    assert response.status_code == 422
-
-@pytest.mark.asyncio
-async def test_change_user_password_success(client, create_user_token):
-    token = create_user_token
+@pytest.mark.parametrize("test_id, expected_status, expected_response", [
+    (1, 200, "Password changed successfully"),
+    (999, 404, "User not found")
+])
+async def test_change_password_success_not_found(client, create_user_for_auth, test_id, expected_status, expected_response):
+    token = create_user_for_auth
+    refresh_token = token["refresh_token"]
     change_data = {
-        "current_password": "testpass",
-        "new_password": "newtestpass"
+        "body": {
+            "current_password": "testpass",
+            "new_password": "newtestpass"
+            },
+        "refresh_token": refresh_token
+    }
+    
+    response = await client.put(
+        f"/users/change/password/{test_id}", 
+        headers={"Authorization": f"Bearer {token["access_token"]}"}, 
+        json=change_data)
+
+    assert response.status_code == expected_status
+    assert response.json() == {"detail": expected_response}
+
+@pytest.mark.asyncio
+async def test_change_user_password_wrong_password(client, create_user_for_auth):
+    token = create_user_for_auth
+    refresh_token = token["refresh_token"]
+    change_data = {
+        "body": {
+            "current_password": "wrongpass",
+            "new_password": "newtestpass"
+            },
+        "refresh_token": refresh_token
     }
 
     TEST_ID = 1
-    response = await client.put(f"/users/change/password/{TEST_ID}", headers={"Authorization": token}, json=change_data)
-
-    assert response.status_code == 200
-    assert response.json() == {"message": "Password changed successfully"}
-
-@pytest.mark.asyncio
-async def test_change_user_password_not_found(client, create_user_token):
-    token = create_user_token
-    change_data = {
-        "current_password": "testpass",
-        "new_password": "newtestpass"
-    }
-
-    TEST_ID = 999
-    response = await client.put(f"/users/change/password/{TEST_ID}", headers={"Authorization": token}, json=change_data)
-
-    assert response.status_code == 404
-    assert response.json() == {"detail": "User not found"}
-
-@pytest.mark.asyncio
-async def test_change_user_password_wrong_password(client, create_user_token):
-    token = create_user_token
-    change_data = {
-        "current_password": "wrongpass",
-        "new_password": "newtestpass"
-    }
-
-    TEST_ID = 1
-    response = await client.put(f"/users/change/password/{TEST_ID}", headers={"Authorization": token}, json=change_data)
+    response = await client.put(f"/users/change/password/{TEST_ID}", headers={"Authorization": f"Bearer {token["access_token"]}"}, json=change_data)
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Credential not found"}

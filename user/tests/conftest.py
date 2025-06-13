@@ -56,7 +56,7 @@ async def create_user_token(client: AsyncClient):
     return f"Bearer {str(token)}"
 
 @pytest.fixture
-async def create_user_for_auth(client: AsyncClient, request):
+async def create_user_for_auth(client: AsyncClient):
     db = TestingSessionLocal()
     try:
         user = User(

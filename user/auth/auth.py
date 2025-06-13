@@ -41,7 +41,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(Credential).filter(Credential.user_id == user_id).first()
     if not user:
         logger.warning(f"Token verification failed: User not found for user_id={user_id}")
-        log_action(db, user_id=user["id"], action=ActionLogEnum.verify_token, status=ActionLogActionsEnum.failed)
+        log_action(db, user_id=user_id, action=ActionLogEnum.verify_token, status=ActionLogActionsEnum.failed)
         raise generate_401_exception(detail="User not found")
     logger.warning(f"Token verification success for user_id={user_id}")
     log_action(db, user_id=user.id, action=ActionLogEnum.verify_token, status=ActionLogActionsEnum.success)
