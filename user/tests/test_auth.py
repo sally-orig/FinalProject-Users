@@ -1,13 +1,14 @@
 import pytest
 from httpx import AsyncClient
 from .test_db import TestingSessionLocal
-from ..models import User, Credential
-from ..auth import get_password_hash
+from ..models import User, Credential, RefreshToken
+from ..auth.auth import get_password_hash
 from ..main import app
 from httpx import ASGITransport
 from datetime import datetime, timedelta, UTC
 from jose import jwt
-from ..auth import SECRET_KEY, ALGORITHM
+from uuid import uuid4
+from ..auth.auth import SECRET_KEY, ALGORITHM
 
 @pytest.mark.asyncio
 async def test_token_endpoint():
@@ -70,90 +71,70 @@ async def test_access_token_undefined(client):
     assert response.json() == {"detail": "Invalid or missing access token"}
 
 @pytest.mark.asyncio
-async def test_access_token_user_not_found(client):
-    to_encode = {"exp": datetime.now(UTC) + timedelta(minutes=30), "token_type": "access"}
-    token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+@pytest.mark.parametrize(
+    "token_payload, expected_detail",
+    [
+        # success case
+        ({"exp": datetime.now(UTC) + timedelta(minutes=30), "token_type": "access"}, "User ID not found in token"),
+        # invalid token type
+        ({"sub": "1", "exp": datetime.now(UTC) + timedelta(minutes=30), "token_type": "refresh"}, "Invalid token type"),
+        # expired token
+        ({"sub": "1", "exp": datetime.now(UTC) - timedelta(minutes=30), "token_type": "access"}, "Token has expired"),
+    ]
+)
+async def test_access_token_errors(client, token_payload, expected_detail):
+    token = jwt.encode(token_payload, SECRET_KEY, algorithm=ALGORITHM)
     response = await client.get(
         "/users",
         headers={"Authorization": f"Bearer {token}"}
     )
     assert response.status_code == 401
-    assert response.json() == {"detail": "User ID not found in token"}
+    assert response.json() == {"detail": expected_detail}
 
 @pytest.mark.asyncio
-async def test_access_token_invalid_type(client):
-    to_encode = {"sub": "1", "exp": datetime.now(UTC) + timedelta(minutes=30), "token_type": "refresh"}
-    token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    response = await client.get(
-        "/users",
-        headers={"Authorization": f"Bearer {token}"}
-    )
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Invalid token type"}
+@pytest.mark.parametrize(
+    "refresh_token_payload, secret, expected_status, expected_detail",
+    [
+        # success case
+        ({"sub": "1", "exp": datetime.now(UTC) + timedelta(days=30), "token_type": "refresh", "jti": str(uuid4())}, SECRET_KEY, 200, None),
+        # expired token
+        ({"sub": "1", "exp": datetime.now(UTC) - timedelta(days=100), "token_type": "refresh", "jti": str(uuid4())}, SECRET_KEY, 401, "Token has expired"),
+        # invalid signature
+        ({"sub": "1", "exp": datetime.now(UTC) + timedelta(days=30), "token_type": "refresh", "jti": str(uuid4())}, "invalidsecret", 401, "Invalid token"),
+        # invalid token type
+        ({"sub": "1", "exp": datetime.now(UTC) + timedelta(days=7), "token_type": "access", "jti": str(uuid4())}, SECRET_KEY, 401, "Invalid token type"),
+    ]
+)
+async def test_refresh_token_errors(client, refresh_token_payload, secret, expected_status, expected_detail):
+    access_token_payload = {"sub": "1", "exp": datetime.now(UTC) + timedelta(minutes=30), "token_type": "access", "jti": str(uuid4())}
+    access_token = jwt.encode(access_token_payload, SECRET_KEY, algorithm=ALGORITHM)
+    refresh_token = jwt.encode(refresh_token_payload, secret, algorithm=ALGORITHM)
 
-@pytest.mark.asyncio
-async def test_access_token_expired(client):
-    to_encode = {"sub": "1", "exp": datetime.now(UTC) - timedelta(minutes=30), "token_type": "access"}
-    token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    response = await client.get(
-        "/users",
-        headers={"Authorization": f"Bearer {token}"}
-    )
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Token has expired"}
+    # Insert the refresh token in DB if this is the success case to simulate valid token
+    if expected_status == 200:
+        db = TestingSessionLocal()
+        db_token = RefreshToken(
+            token=refresh_token,
+            user_id=1,
+            expires_at=datetime.now(UTC) + timedelta(days=30)
+        )
+        db.add(db_token)
+        db.commit()
+        db.refresh(db_token)
+        db.close()
 
-@pytest.mark.asyncio
-async def test_refresh_token_success(client, create_user_for_auth):
-    data = create_user_for_auth
     response = await client.post(
         "/auth/token/refresh",
-        headers={"Authorization": f"Bearer {data["access_token"]}"},
-        json={"refresh_token": data["refresh_token"]},
-    )
-
-    assert response.status_code == 200
-    json_data = response.json()
-    assert "access_token" in json_data
-    assert "refresh_token" in json_data
-    assert json_data["token_type"] == "bearer"
-
-@pytest.mark.asyncio
-async def test_refresh_token_expired(client, create_user_for_auth):
-    user = create_user_for_auth
-    to_encode = {"sub": "1", "exp": datetime.now(UTC) - timedelta(days=100), "token_type": "refresh"}
-    expired_refresh_token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    response = await client.post(
-        "/auth/token/refresh",
-        headers={"Authorization": f"Bearer {user['access_token']}"},
-        json={"refresh_token": expired_refresh_token},
-    )
-
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Refresh token has expired"}
-
-@pytest.mark.asyncio
-async def test_refresh_token_invalid(client, create_user_for_auth):
-    user = create_user_for_auth
-    to_encode = {"sub": "1", "exp": datetime.now(UTC) - timedelta(days=100), "token_type": "refresh"}
-    expired_refresh_token = jwt.encode(to_encode, "invalidsecret", algorithm=ALGORITHM)
-    response = await client.post(
-        "/auth/token/refresh",
-        headers={"Authorization": f"Bearer {user['access_token']}"},
-        json={"refresh_token": expired_refresh_token},
-    )
-
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Invalid refresh token"}
-
-async def test_refresh_token_invalid_token_type(client, create_user_for_auth):
-    user = create_user_for_auth
-    to_encode = {"sub": "1", "exp": datetime.now(UTC) + timedelta(days=7), "token_type": "access"}
-    refresh_token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    response = await client.post(
-        "/auth/token/refresh",
-        headers={"Authorization": f"Bearer {user['access_token']}"},
+        headers={"Authorization": f"Bearer {access_token}"},
         json={"refresh_token": refresh_token},
     )
 
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Invalid token type"}
+    assert response.status_code == expected_status
+    if expected_detail:
+        assert response.json() == {"detail": expected_detail}
+    else:
+        # success assertions
+        json_data = response.json()
+        assert "access_token" in json_data
+        assert "refresh_token" in json_data
+        assert json_data["token_type"] == "bearer"

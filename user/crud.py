@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from .models import User, Credential
 from .schemas import UserOut, PaginatedResponse, UserCreate, UserUpdate
-from .auth import get_password_hash, verify_password
+from .auth.auth import get_password_hash, verify_password
 from typing import Optional
 from datetime import datetime, timezone
 

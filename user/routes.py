@@ -5,7 +5,7 @@ from .db import get_db
 from .schemas import PaginatedResponse, UserOut, StatusEnum, UserCreate, UserUpdate
 from .logger import logger, log_action
 from .schemas import ActionLogEnum, ActionLogActionsEnum, CredentialUpdate
-from .auth import get_current_user
+from .auth.auth import get_current_user
 from typing import Optional
 
 router = APIRouter()

@@ -86,13 +86,19 @@ async def test_register_user_success(client):
     assert response.json() == {"message": "User created successfully"}
 
 @pytest.mark.asyncio
-async def test_register_user_fail_duplicate_username(client):
+@pytest.mark.parametrize(
+    "email1, email2, username1, username2, expected_status, expected_detail", 
+    [
+        ("exists@example.com", "another@example.com", "testuser", "testuser", 400, "Username already exists"),
+        ("duplicate@example.com", "duplicate@example.com", "testuser", "testuser1", 400, "Email already exists")
+    ])
+async def test_register_user_fail_duplicate_email_username (client, email1, email2, username1, username2, expected_status, expected_detail):
     db = TestingSessionLocal()
-    from ..auth import get_password_hash
+    from ..auth.auth import get_password_hash
     from datetime import datetime, timezone
 
     user = User(
-        email="exists@example.com",
+        email=email1,
         mobile="09999999999",
         firstName="Dup",
         middleName="Name",
@@ -106,90 +112,38 @@ async def test_register_user_fail_duplicate_username(client):
     db.commit()
     db.refresh(user)
 
-    cred = Credential(user_id=user.id, username="testuser", hashed_password=get_password_hash("testpass"))
+    cred = Credential(user_id=user.id, username=username1, hashed_password=get_password_hash("testpass"))
     db.add(cred)
     db.commit()
     db.close()
 
     user_data = {
-        "email": "another@example.com",
+        "email": email2,
         "mobile": "09123456780",
         "firstName": "Another",
         "middleName": "Test",
         "lastName": "User",
-        "username": "testuser",
+        "username": username2,
         "plain_password": "testpass",
         "role": "User"
     }
 
     response = await client.post("/users/register", json=user_data)
-    assert response.status_code == 400
-    assert response.json() == {"detail": "Username already exists"}
+    assert response.status_code == expected_status
+    assert response.json() == {"detail": expected_detail}
 
 @pytest.mark.asyncio
-async def test_register_user_fail_duplicate_email(client):
-    db = TestingSessionLocal()
-    from ..auth import get_password_hash
-    from datetime import datetime, timezone
-
-    user = User(
-        email="duplicate@example.com",
-        mobile="09999999999",
-        firstName="Dup",
-        middleName="Name",
-        lastName="User",
-        completeName="Dup Name User",
-        role="User",
-        status="active",
-        created_at=datetime.now(timezone.utc)
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    cred = Credential(user_id=user.id, username="testuser1", hashed_password=get_password_hash("testpass"))
-    db.add(cred)
-    db.commit()
-    db.close()
-
-    user_data = {
-        "email": "duplicate@example.com",
-        "mobile": "09123456780",
-        "firstName": "Another",
-        "middleName": "Test",
-        "lastName": "User",
-        "username": "testuser",
-        "plain_password": "testpass",
-        "role": "User"
-    }
-
-    response = await client.post("/users/register", json=user_data)
-    assert response.status_code == 400
-    assert response.json() == {"detail": "Email already exists"}
-
-@pytest.mark.asyncio
-async def test_invalid_email(client, create_user_token):
+@pytest.mark.parametrize("mobile, email,expected_status", [
+    ("11", "duplicate@example.com", 422),
+    ("091234567890", "duplicate@example.com", 422),
+    ("string", "duplicate@example.com", 422),
+    ("09112222222", "invalid-email", 422),
+])
+async def test_register_user_invalid_mobile_email(client, create_user_token, mobile, email, expected_status):
     token = create_user_token
     user_data = {
-        "email": "invalid-email",
-        "mobile": "09123456789",
-        "firstName": "Invalid",
-        "middleName": "Email",
-        "lastName": "Test",
-        "username": "invaliduser",
-        "plain_password": "invalidpassword",
-        "role": "User"
-    }
-
-    response = await client.post("/users/register", headers={"Authorization": token}, json=user_data)
-    assert response.status_code == 422
-
-@pytest.mark.asyncio
-async def test_invalid_mobile_too_short(client, create_user_token):
-    token = create_user_token
-    user_data = {
-        "email": "duplicate@example.com",
-        "mobile": "091234567",
+        "email": email,
+        "mobile": mobile,
         "firstName": "Another",
         "middleName": "Test",
         "lastName": "User",
@@ -198,39 +152,7 @@ async def test_invalid_mobile_too_short(client, create_user_token):
         "role": "User"
     }
     response = await client.post("/users/register", headers={"Authorization": token}, json=user_data)
-    assert response.status_code == 422
-
-@pytest.mark.asyncio
-async def test_invalid_mobile_too_long(client, create_user_token):
-    token = create_user_token
-    user_data = {
-        "email": "duplicate@example.com",
-        "mobile": "091234567090090",
-        "firstName": "Another",
-        "middleName": "Test",
-        "lastName": "User",
-        "username": "testuser",
-        "plain_password": "testpass",
-        "role": "User"
-    }
-    response = await client.post("/users/register", headers={"Authorization": token}, json=user_data)
-    assert response.status_code == 422
-
-@pytest.mark.asyncio
-async def test_invalid_mobile_not_numeric(client, create_user_token):
-    token = create_user_token
-    user_data = {
-        "email": "duplicate@example.com",
-        "mobile": "string",
-        "firstName": "Another",
-        "middleName": "Test",
-        "lastName": "User",
-        "username": "testuser",
-        "plain_password": "testpass",
-        "role": "User"
-    }
-    response = await client.post("/users/register", headers={"Authorization": token}, json=user_data)
-    assert response.status_code == 422
+    assert response.status_code == expected_status
 
 @pytest.mark.asyncio
 async def test_update_user_success(client, create_user_token):

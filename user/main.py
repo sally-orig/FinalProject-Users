@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from .routes import router
-from .auth import token_router
+from .auth.auth import token_router
 
 app = FastAPI(title="User Management API", version="1.0.0")
 

@@ -2,9 +2,11 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 from ..main import app
 from .test_db import setup_test_db, teardown_test_db, TestingSessionLocal
-from ..models import User, Credential
-from ..auth import get_password_hash
+from ..models import User, Credential, RefreshToken
+from ..auth.auth import get_password_hash, save_refresh_token
 from datetime import datetime, timezone
+import uuid
+from fastapi import Request
 
 @pytest.fixture(scope="function", autouse=True)
 def setup_and_teardown_db():
@@ -54,11 +56,11 @@ async def create_user_token(client: AsyncClient):
     return f"Bearer {str(token)}"
 
 @pytest.fixture
-async def create_user_for_auth(client: AsyncClient):
+async def create_user_for_auth(client: AsyncClient, request):
     db = TestingSessionLocal()
     try:
         user = User(
-            email="call@gmil.com",
+            email=f"call+{uuid.uuid4()}@gmil.com",
             mobile="09231111890",
             firstName="Call",
             middleName="Me",
@@ -72,17 +74,19 @@ async def create_user_for_auth(client: AsyncClient):
 
         credential = Credential(
             user_id=user.id,
-            username="testuser",
+            username=f"testuser_{uuid.uuid4()}",
             hashed_password=get_password_hash("testpass"),
         )
         db.add(credential)
+
         db.commit()
+
+        response = await client.post(
+            "/auth/token",
+            data={"username": credential.username, "password": "testpass"},
+        )
+
+        assert response.status_code == 200, f"Token generation failed: {response.text}"
+        return response.json()
     finally:
         db.close()
-
-    response = await client.post(
-        "/auth/token",
-        data={"username": "testuser", "password": "testpass"},
-    )
-    assert response.status_code == 200, f"Token generation failed: {response.text}"
-    return response.json()
